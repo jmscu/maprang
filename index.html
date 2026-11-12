@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>มะปราง</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@700&display=swap">
+<style>
+  /* Layout: one full-screen black stage; the heart is drawn on a single canvas.
+     Single committed look (cream on black), so no light theme. */
+  :root {
+    --stage: #000000;
+    --cream: #FFFDD0;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--stage);
+    color: var(--cream);
+    overflow: hidden;
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="stage" aria-label="A heart made of the words I love you, spinning around the name มะปราง" role="img"></canvas>
+
+<script>
+(function () {
+  var CREAM = "#FFFDD0";
+  var NAME = "มะปราง";
+  var NAME_FONT = '"Noto Sans Thai", "Thonburi", "Sukhumvit Set", "Leelawadee UI", Tahoma, sans-serif';
+  var TEXT_FONT = 'Arial, Helvetica, sans-serif';
+
+  var N = 120;                 // "I love you" per ring
+  var SCALE_MIN = 16, SCALE_MAX = 24;
+  var DRAW_SECONDS = 12.5;     // time to draw the whole heart
+  var NAME_FADE = 0.7;         // name fades in after the heart is finished
+  var NAME_PAUSE = 1.0;        // hold after the name appears, then spin
+  var SECONDS_PER_TURN = 10;   // one full 360 degree spin around the vertical axis
+  var NAME_OFFSET_Y = 28;      // raise the name so it looks centered
+
+  var canvas = document.getElementById("stage");
+  var ctx = canvas.getContext("2d");
+
+  function heartPoint(angle, scale) {
+    return [
+      16 * Math.pow(Math.sin(angle), 3) * scale,
+      (13 * Math.cos(angle) - 5 * Math.cos(2 * angle) -
+       2 * Math.cos(3 * angle) - Math.cos(4 * angle)) * scale
+    ];
+  }
+
+  // Shift the heart so its bounding box is centered on the origin. It then
+  // spins around its own center, right where the name sits.
+  var yMin = Infinity, yMax = -Infinity;
+  for (var k = 0; k < N; k++) {
+    var q = heartPoint(k * 2 * Math.PI / N, SCALE_MAX)[1];
+    if (q < yMin) yMin = q;
+    if (q > yMax) yMax = q;
+  }
+  var centerY = (yMax + yMin) / 2;
+  var heightUnits = (yMax - yMin) + 30;
+  var widthUnits = 2 * 16 * SCALE_MAX + 60;
+
+  // Points start at the top and go clockwise, one full ring per scale, small to large.
+  var points = [];
+  for (var s = SCALE_MIN; s <= SCALE_MAX; s++) {
+    for (var i = 0; i < N; i++) {
+      var p = heartPoint(i * 2 * Math.PI / N, s);
+      points.push([p[0], p[1] - centerY]);
+    }
+  }
+
+  var W = 0, H = 0, S = 1, dpr = 1;
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    S = Math.min(W / widthUnits, H / heightUnits) * 0.96;
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  var startTime = null;
+  function frame(now) {
+    if (startTime === null) startTime = now;
+    var t = (now - startTime) / 1000;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = CREAM;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    var drawn = Math.min(points.length, Math.floor(t / DRAW_SECONDS * points.length));
+    var spinStart = DRAW_SECONDS + NAME_PAUSE;
+    var phi = t > spinStart ? (t - spinStart) / SECONDS_PER_TURN * 2 * Math.PI : 0;
+    var squeeze = Math.cos(phi);
+
+    var cx = W / 2, cy = H / 2;
+    ctx.font = "700 " + Math.max(6, 8 * S) + "px " + TEXT_FONT;
+    for (var j = 0; j < drawn; j++) {
+      ctx.fillText("I love you", cx + points[j][0] * S * squeeze, cy - points[j][1] * S);
+    }
+
+    // The name appears once the heart is finished and never moves.
+    var nameAlpha = Math.min(1, Math.max(0, (t - DRAW_SECONDS) / NAME_FADE));
+    if (nameAlpha > 0) {
+      ctx.globalAlpha = nameAlpha;
+      ctx.font = "700 " + Math.max(20, 48 * S) + "px " + NAME_FONT;
+      ctx.fillText(NAME, cx, cy - NAME_OFFSET_Y * S);
+      ctx.globalAlpha = 1;
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  // Wait for the Thai font so the name is drawn in it, but never wait long.
+  var fontReady = (document.fonts && document.fonts.load)
+    ? document.fonts.load('700 48px "Noto Sans Thai"', NAME).catch(function () {})
+    : Promise.resolve();
+  Promise.race([fontReady, new Promise(function (r) { setTimeout(r, 2500); })])
+    .then(function () { requestAnimationFrame(frame); });
+})();
+</script>
+</body>
+</html>
